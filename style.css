@@ -1272,7 +1272,7 @@ body::after {
 
 .panel-content {
     padding: 10px 12px;
-    max-height: 130px;
+    max-height: 280px;
     overflow-y: auto
 }
 

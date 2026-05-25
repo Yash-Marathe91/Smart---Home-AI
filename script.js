@@ -14,6 +14,7 @@ let isListening = false;
 let recognitionTimeout = null;
 let automationInterval = null;
 const HISTORY_KEY = "smarthome-history-v3";
+let insightsChartInstance = null;
 
 // ── Speech Recognition ────────────────────────
 const SpeechRecognitionAPI =
@@ -113,6 +114,19 @@ function applyTheme(theme) {
     const themeIcon = document.getElementById("themeIcon");
     themeIcon.setAttribute("data-lucide", theme === "dark" ? "moon" : "sun");
     lucide.createIcons();
+    
+    // Update chart theme colors dynamically if it exists
+    if (insightsChartInstance) {
+        const isDark = theme === "dark";
+        const textColor = isDark ? "#ffffff" : "#1A2E33";
+        const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
+        
+        insightsChartInstance.options.scales.x.ticks.color = textColor;
+        insightsChartInstance.options.scales.x.grid.color = gridColor;
+        insightsChartInstance.options.scales.y.ticks.color = textColor;
+        insightsChartInstance.options.scales.y.grid.color = gridColor;
+        insightsChartInstance.update();
+    }
 }
 
 // ── User prefs ────────────────────────────────
@@ -511,21 +525,121 @@ async function updateInsightsPanel() {
     try {
         const r = await apiFetch("/insights");
         const { total, top_commands } = r.data || r;
-        const el = document.getElementById("insightsPanel");
-        if (!el) return;
-
-        el.innerHTML = `<div class="insight-total">Total commands: <strong>${total}</strong></div>`;
-        if (top_commands && top_commands.length > 0) {
-            const list = document.createElement("ul");
-            list.className = "insight-list";
-            top_commands.forEach(({ command, count }) => {
-                const li = document.createElement("li");
-                li.innerHTML = `<span class="insight-cmd">${command}</span><span class="insight-badge">${count}×</span>`;
-                list.appendChild(li);
-            });
-            el.appendChild(list);
+        
+        const totalCountEl = document.getElementById("totalCommandsCount");
+        if (totalCountEl) {
+            totalCountEl.textContent = total;
         }
-    } catch { /* insights are optional */ }
+
+        const chartContainer = document.querySelector(".chart-container");
+        if (!top_commands || top_commands.length === 0) {
+            if (chartContainer) chartContainer.style.display = "none";
+            const totalCountDiv = document.querySelector(".insight-total");
+            if (totalCountDiv) {
+                totalCountDiv.insertAdjacentHTML('afterend', '<div class="text-muted" style="margin-top: 10px;">No commands recorded yet. Try typing or speaking commands!</div>');
+            }
+            return;
+        } else {
+            if (chartContainer) chartContainer.style.display = "block";
+            // Clean up any fallback message if it exists
+            const fallbackMsg = document.querySelector(".insights-panel .text-muted");
+            if (fallbackMsg) fallbackMsg.remove();
+        }
+
+        const labels = top_commands.map(item => {
+            let label = item.command;
+            if (label.startsWith("control:")) {
+                const parts = label.split(":");
+                label = `${parts[1].toUpperCase()} ${parts[2].toUpperCase()}`;
+            } else if (label.startsWith("scene:")) {
+                label = `${label.split(":")[1].toUpperCase()} Scene`;
+            } else if (label.startsWith("🎤")) {
+                label = `Voice command`;
+            }
+            return label;
+        });
+        
+        const counts = top_commands.map(item => item.count);
+        const ctx = document.getElementById('insightsChart');
+        if (!ctx) return;
+
+        const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+        const textColor = isDark ? "#ffffff" : "#1A2E33";
+        const gridColor = isDark ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
+        const barColor = "#55A9A8";
+
+        if (insightsChartInstance) {
+            insightsChartInstance.data.labels = labels;
+            insightsChartInstance.data.datasets[0].data = counts;
+            insightsChartInstance.options.plugins.legend.labels.color = textColor;
+            insightsChartInstance.options.scales.x.ticks.color = textColor;
+            insightsChartInstance.options.scales.x.grid.color = gridColor;
+            insightsChartInstance.options.scales.y.ticks.color = textColor;
+            insightsChartInstance.options.scales.y.grid.color = gridColor;
+            insightsChartInstance.update();
+        } else {
+            insightsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Command Executions',
+                        data: counts,
+                        backgroundColor: barColor,
+                        borderColor: barColor,
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `Used: ${context.parsed.y} times`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                font: {
+                                    size: 10,
+                                    family: "'Segoe UI', system-ui, sans-serif"
+                                }
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: gridColor
+                            },
+                            ticks: {
+                                color: textColor,
+                                stepSize: 1,
+                                beginAtZero: true,
+                                font: {
+                                    size: 10,
+                                    family: "'Segoe UI', system-ui, sans-serif"
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Failed to update insights chart:", e);
+    }
 }
 
 // ── Local history (client-side, instant) ──────

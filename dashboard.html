@@ -17,6 +17,8 @@
     <link rel="stylesheet" href="style.css" />
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -246,7 +248,10 @@
                 <!-- Insights tab -->
                 <div class="panel-content hidden" id="pane-insights" role="tabpanel">
                     <div id="insightsPanel" class="insights-panel">
-                        <span class="text-muted">Loading insights…</span>
+                        <div class="insight-total">Total commands: <strong id="totalCommandsCount">0</strong></div>
+                        <div class="chart-container" style="position: relative; height: 180px; width: 100%; margin-top: 10px;">
+                            <canvas id="insightsChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
